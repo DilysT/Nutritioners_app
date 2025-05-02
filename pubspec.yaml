@@ -28,6 +28,7 @@ environment:
 # the latest version available on pub.dev. To see which dependencies have newer
 # versions available, run `flutter pub outdated`.
 dependencies:
+  table_calendar: ^3.0.8
   http: ^0.13.5
   flutter_secure_storage: ^8.0.0
   flutter:
