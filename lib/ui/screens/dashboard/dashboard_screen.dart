@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../widgets/bottom_nav_bar.dart';
+import '../../../services/api_dashboard.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -10,18 +11,49 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  DateTime selectedDate = DateTime.now();
+  //DateTime selectedDate = DateTime.now();
+  DateTime selectedDate = DateTime.parse("2024-11-12"); // ✅ Đúng
+
+  Map<String, dynamic>? diaryData;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchData();
+  }
+
+  Future<void> _fetchData() async {
+    try {
+      final formattedDate = DateFormat('yyyy-MM-dd').format(selectedDate);
+      print("Fetching for $formattedDate");
+      final data = await ApiDashboardService.fetchDashboardData(formattedDate);
+      print("Response: $data");
+
+      if (data != null && data.containsKey('diary')) {
+        setState(() {
+          diaryData = data['diary'];
+        });
+      } else {
+        print("No 'diary' in data");
+      }
+    } catch (e) {
+      print("Error fetching data: $e");
+    }
+  }
+
 
   void _goToPreviousDay() {
     setState(() {
       selectedDate = selectedDate.subtract(const Duration(days: 1));
     });
+    _fetchData();
   }
 
   void _goToNextDay() {
     setState(() {
       selectedDate = selectedDate.add(const Duration(days: 1));
     });
+    _fetchData();
   }
 
   String _getDisplayDate() {
@@ -45,11 +77,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
       setState(() {
         selectedDate = picked;
       });
+      _fetchData();
     }
   }
 
   Widget _buildEnergySummary() {
-    Widget _buildCircle(String label, int kcal, Color color) {
+    if (diaryData == null) return const CircularProgressIndicator();
+
+    double consumed = double.parse(diaryData!['calories_consumed']);
+    double remaining = double.parse(diaryData!['calories_remaining']);
+    double total = consumed + remaining;
+
+    Widget _buildCircle(String label, double kcal, Color color) {
       return Column(
         children: [
           Stack(
@@ -59,7 +98,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 height: 100,
                 width: 100,
                 child: CircularProgressIndicator(
-                  value: 0.75,
+                  value: total == 0 ? 0 : kcal / total,
                   strokeWidth: 10,
                   backgroundColor: color.withOpacity(0.2),
                   valueColor: AlwaysStoppedAnimation<Color>(color),
@@ -68,7 +107,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Column(
                 children: [
                   Text(
-                    '$kcal',
+                    '${kcal.toStringAsFixed(0)}',
                     style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                   ),
                   const Text('Kcal', style: TextStyle(fontSize: 14)),
@@ -95,15 +134,30 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          _buildCircle("Calorie consumed", 938, Colors.blue),
-          _buildCircle("Calorie remaining", 938, Colors.cyan),
+          _buildCircle("Calorie consumed", consumed, Colors.blue),
+          _buildCircle("Calorie remaining", remaining, Colors.cyan),
         ],
       ),
     );
   }
 
   Widget _buildMacroTargets() {
-    Widget _buildMacro(String title, int current, int goal, double progress) {
+    if (diaryData == null) return const SizedBox();
+
+    double getDouble(String key) => double.tryParse(diaryData![key] ?? '0') ?? 0;
+
+    double protein = getDouble('protein_consumed');
+    double proteinTarget = protein + getDouble('protein_remaining');
+
+    double fat = getDouble('fat_consumed');
+    double fatTarget = fat + getDouble('fat_remaining');
+
+    double carbs = getDouble('carbs_consumed');
+    double carbsTarget = carbs + getDouble('carbs_remaining');
+
+    Widget _buildMacro(String title, double current, double goal) {
+      double progress = goal == 0 ? 0 : current / goal;
+
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 8),
         child: Row(
@@ -112,7 +166,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('$current/$goal (g)', style: const TextStyle(fontWeight: FontWeight.w600)),
+                  Text('${current.toStringAsFixed(1)}/${goal.toStringAsFixed(1)} (g)',
+                      style: const TextStyle(fontWeight: FontWeight.w600)),
                   Text(title, style: const TextStyle(color: Colors.grey)),
                 ],
               ),
@@ -148,9 +203,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildMacro("Protein", 345, 453, 0.75),
-          _buildMacro("Fat", 345, 453, 0.75),
-          _buildMacro("Carb", 345, 453, 0.75),
+          _buildMacro("Protein", protein, proteinTarget),
+          _buildMacro("Fat", fat, fatTarget),
+          _buildMacro("Carb", carbs, carbsTarget),
         ],
       ),
     );
@@ -167,12 +222,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
             children: [
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    "Welcome back, John 👋",
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                  ),
-                  const Icon(Icons.notifications_none),
+                children: const [
+                  Text("Welcome back, John 👋",
+                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                  Icon(Icons.notifications_none),
                 ],
               ),
               const SizedBox(height: 20),
@@ -182,12 +235,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: Colors.grey.shade300),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black12,
-                      blurRadius: 4,
-                      offset: Offset(0, 2),
-                    ),
+                  boxShadow: const [
+                    BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2)),
                   ],
                 ),
                 child: Row(
