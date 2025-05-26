@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import '../../widgets/bottom_nav_bar.dart';
-import '../../../services/api_dashboard.dart';
+import 'package:nutrition_app/services/dashboard_api.dart';
+import 'package:nutrition_app/services/setting_api.dart';
+import 'package:nutrition_app/models/dashboard_model.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -11,49 +14,37 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  //DateTime selectedDate = DateTime.now();
-  DateTime selectedDate = DateTime.parse("2024-11-12"); // ✅ Đúng
-
-  Map<String, dynamic>? diaryData;
+  DateTime selectedDate = DateTime.now();
+  DiaryData? diaryData;
+  bool isLoading = true;
+  String userName = '';
 
   @override
   void initState() {
     super.initState();
-    _fetchData();
+    _loadDiary();
+    _loadUserInfo();
   }
 
-  Future<void> _fetchData() async {
+  Future<void> _loadUserInfo() async {
     try {
-      final formattedDate = DateFormat('yyyy-MM-dd').format(selectedDate);
-      print("Fetching for $formattedDate");
-      final data = await ApiDashboardService.fetchDashboardData(formattedDate);
-      print("Response: $data");
-
-      if (data != null && data.containsKey('diary')) {
-        setState(() {
-          diaryData = data['diary'];
-        });
-      } else {
-        print("No 'diary' in data");
-      }
+      final data = await ApiService.getUserInformation();
+      setState(() {
+        userName = data.user.name;
+      });
     } catch (e) {
-      print("Error fetching data: $e");
+      debugPrint('Failed to load user info: $e');
     }
   }
 
-
-  void _goToPreviousDay() {
+  Future<void> _loadDiary() async {
+    setState(() => isLoading = true);
+    final dateStr = DateFormat('yyyy-MM-dd').format(selectedDate);
+    final data = await DashboardApi.getDiaryByDate(dateStr);
     setState(() {
-      selectedDate = selectedDate.subtract(const Duration(days: 1));
+      diaryData = data;
+      isLoading = false;
     });
-    _fetchData();
-  }
-
-  void _goToNextDay() {
-    setState(() {
-      selectedDate = selectedDate.add(const Duration(days: 1));
-    });
-    _fetchData();
   }
 
   String _getDisplayDate() {
@@ -63,111 +54,148 @@ class _DashboardScreenState extends State<DashboardScreen> {
         selectedDate.day == now.day) {
       return 'Today';
     }
-    return DateFormat('EEEE, MMMM d, yyyy').format(selectedDate);
+    return DateFormat('MMMM d, yyyy').format(selectedDate);
   }
 
   Future<void> _selectDate(BuildContext context) async {
-    final DateTime? picked = await showDatePicker(
+    final picked = await showDatePicker(
       context: context,
       initialDate: selectedDate,
-      firstDate: DateTime(2000),
+      firstDate: DateTime(2020),
       lastDate: DateTime(2100),
     );
-    if (picked != null && picked != selectedDate) {
-      setState(() {
-        selectedDate = picked;
-      });
-      _fetchData();
+    if (picked != null) {
+      setState(() => selectedDate = picked);
+      _loadDiary();
     }
   }
 
-  Widget _buildEnergySummary() {
-    if (diaryData == null) return const CircularProgressIndicator();
-
-    double consumed = double.parse(diaryData!['calories_consumed']);
-    double remaining = double.parse(diaryData!['calories_remaining']);
-    double total = consumed + remaining;
-
-    Widget _buildCircle(String label, double kcal, Color color) {
-      return Column(
-        children: [
-          Stack(
-            alignment: Alignment.center,
-            children: [
-              SizedBox(
-                height: 100,
-                width: 100,
-                child: CircularProgressIndicator(
-                  value: total == 0 ? 0 : kcal / total,
-                  strokeWidth: 10,
-                  backgroundColor: color.withOpacity(0.2),
-                  valueColor: AlwaysStoppedAnimation<Color>(color),
-                ),
+  Widget _buildAnimatedProgressCircle({
+    required double targetProgress,
+    required int targetValue,
+    required Color color,
+  }) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.0, end: targetProgress),
+      duration: const Duration(seconds: 2),
+      curve: Curves.easeOut,
+      builder: (context, animatedProgress, child) {
+        return Stack(
+          alignment: Alignment.center,
+          children: [
+            SizedBox(
+              height: 90,
+              width: 90,
+              child: CircularProgressIndicator(
+                value: animatedProgress,
+                strokeWidth: 10,
+                backgroundColor: Colors.grey.shade200,
+                valueColor: AlwaysStoppedAnimation<Color>(color),
               ),
-              Column(
+            ),
+            TweenAnimationBuilder<int>(
+              tween: IntTween(begin: 0, end: targetValue),
+              duration: const Duration(seconds: 2),
+              builder: (context, animatedValue, child) {
+                return Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text('$animatedValue',
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 20)),
+                    const Text('Kcal',
+                        style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  ],
+                );
+              },
+            )
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildEnergySummary() {
+    if (diaryData == null) return const SizedBox();
+
+    double consumed = diaryData!.caloriesConsumed;
+    double remaining = diaryData!.caloriesRemaining;
+    double total = consumed + remaining;
+    double consumedPercent = total == 0 ? 0 : consumed / total;
+    double remainingPercent = total == 0 ? 0 : remaining / total;
+
+    return Container(
+      margin: const EdgeInsets.only(top: 24),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 10)],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: const [
+              Icon(Icons.local_fire_department, color: Colors.orange),
+              SizedBox(width: 8),
+              Text("Energy Summary",
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Column(
+            children: [
+              Row(
                 children: [
-                  Text(
-                    '${kcal.toStringAsFixed(0)}',
-                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  _buildAnimatedProgressCircle(
+                    targetProgress: consumedPercent,
+                    targetValue: consumed.toInt(),
+                    color: Colors.blue,
                   ),
-                  const Text('Kcal', style: TextStyle(fontSize: 14)),
+                  const SizedBox(width: 20),
+                  const Text("Calorie consumed",
+                      style: TextStyle(fontSize: 14)),
+                ],
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  _buildAnimatedProgressCircle(
+                    targetProgress: remainingPercent,
+                    targetValue: remaining.toInt(),
+                    color: Colors.cyan,
+                  ),
+                  const SizedBox(width: 20),
+                  const Text("Calorie remaining",
+                      style: TextStyle(fontSize: 14)),
                 ],
               ),
             ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            label,
-            style: const TextStyle(fontWeight: FontWeight.w500),
-          ),
-        ],
-      );
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 6)],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: [
-          _buildCircle("Calorie consumed", consumed, Colors.blue),
-          _buildCircle("Calorie remaining", remaining, Colors.cyan),
+          )
         ],
       ),
-    );
+    ).animate().fadeIn(duration: 500.ms).slideY(begin: 0.1);
   }
 
   Widget _buildMacroTargets() {
     if (diaryData == null) return const SizedBox();
 
-    double getDouble(String key) => double.tryParse(diaryData![key] ?? '0') ?? 0;
-
-    double protein = getDouble('protein_consumed');
-    double proteinTarget = protein + getDouble('protein_remaining');
-
-    double fat = getDouble('fat_consumed');
-    double fatTarget = fat + getDouble('fat_remaining');
-
-    double carbs = getDouble('carbs_consumed');
-    double carbsTarget = carbs + getDouble('carbs_remaining');
-
-    Widget _buildMacro(String title, double current, double goal) {
-      double progress = goal == 0 ? 0 : current / goal;
+    Widget _buildMacroRow(String title, double current, double goal) {
+      double total = current + goal;
+      double progress = total == 0 ? 0 : current / total;
 
       return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
+        padding: const EdgeInsets.symmetric(vertical: 12),
         child: Row(
           children: [
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('${current.toStringAsFixed(1)}/${goal.toStringAsFixed(1)} (g)',
-                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                  Text('${current.toInt()}/${total.toInt()} (g)',
+                      style: const TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 4),
                   Text(title, style: const TextStyle(color: Colors.grey)),
                 ],
               ),
@@ -176,97 +204,117 @@ class _DashboardScreenState extends State<DashboardScreen> {
               alignment: Alignment.center,
               children: [
                 SizedBox(
-                  height: 36,
                   width: 36,
+                  height: 36,
                   child: CircularProgressIndicator(
                     value: progress,
                     strokeWidth: 4,
-                    backgroundColor: Colors.grey.shade300,
-                    valueColor: const AlwaysStoppedAnimation<Color>(Colors.indigo),
+                    backgroundColor: Colors.grey.shade200,
+                    valueColor:
+                    const AlwaysStoppedAnimation<Color>(Colors.indigo),
                   ),
                 ),
-                Text('${(progress * 100).toInt()}%', style: const TextStyle(fontSize: 10)),
+                Text('${(progress * 100).toInt()}%',
+                    style: const TextStyle(fontSize: 10)),
               ],
-            ),
+            )
           ],
         ),
       );
     }
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(top: 20),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 6)],
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 10)],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildMacro("Protein", protein, proteinTarget),
-          _buildMacro("Fat", fat, fatTarget),
-          _buildMacro("Carb", carbs, carbsTarget),
+          Row(
+            children: const [
+              Icon(Icons.fitness_center, color: Colors.deepPurple),
+              SizedBox(width: 8),
+              Text("Macro Targets",
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _buildMacroRow("Protein", diaryData!.proteinConsumed,
+              diaryData!.proteinRemaining),
+          _buildMacroRow(
+              "Fat", diaryData!.fatConsumed, diaryData!.fatRemaining),
+          _buildMacroRow(
+              "Carb", diaryData!.carbsConsumed, diaryData!.carbsRemaining),
         ],
       ),
-    );
+    ).animate().fadeIn(duration: 500.ms).slideY(begin: 0.2);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF8F9FB),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+        child: isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : SingleChildScrollView(
+          padding:
+          const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: const [
-                  Text("Welcome back, John 👋",
-                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                  Icon(Icons.notifications_none),
-                ],
-              ),
+              Text(
+                "Welcome back, ${userName.isNotEmpty ? userName : '...'} 👋",
+                style: const TextStyle(
+                    fontSize: 20, fontWeight: FontWeight.bold),
+              ).animate().fadeIn(),
               const SizedBox(height: 20),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 8),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey.shade300),
                   boxShadow: const [
-                    BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2)),
+                    BoxShadow(color: Colors.black12, blurRadius: 4)
                   ],
                 ),
                 child: Row(
                   children: [
                     IconButton(
-                      icon: const Icon(Icons.arrow_back_ios_new, size: 18),
-                      onPressed: _goToPreviousDay,
-                    ),
+                        icon: const Icon(Icons.arrow_back_ios, size: 18),
+                        onPressed: () {
+                          setState(() => selectedDate =
+                              selectedDate.subtract(
+                                  const Duration(days: 1)));
+                          _loadDiary();
+                        }),
                     Expanded(
                       child: Center(
-                        child: Text(
-                          _getDisplayDate(),
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                        ),
+                        child: Text(_getDisplayDate(),
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold)),
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.arrow_forward_ios, size: 18),
-                      onPressed: _goToNextDay,
-                    ),
+                        icon:
+                        const Icon(Icons.arrow_forward_ios, size: 18),
+                        onPressed: () {
+                          setState(() => selectedDate =
+                              selectedDate.add(
+                                  const Duration(days: 1)));
+                          _loadDiary();
+                        }),
                     IconButton(
-                      icon: const Icon(Icons.calendar_today, size: 18),
-                      onPressed: () => _selectDate(context),
-                    ),
+                        icon: const Icon(Icons.calendar_today, size: 18),
+                        onPressed: () => _selectDate(context)),
                   ],
                 ),
-              ),
-              const SizedBox(height: 20),
+              ).animate().fadeIn(duration: 300.ms),
               _buildEnergySummary(),
-              const SizedBox(height: 20),
               _buildMacroTargets(),
             ],
           ),
