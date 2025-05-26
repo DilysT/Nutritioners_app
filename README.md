@@ -26,7 +26,7 @@ A beautifully crafted **Flutter mobile app** to help users track their daily mea
 
 1. **Clone the project:**
    ```bash
-   git clone https://github.com/yourusername/nutrition_app.git
+   git clone https://github.com/DilysT/Nutritioners_app.git
    cd nutrition_app
    ```
 
@@ -98,7 +98,7 @@ See the [LICENSE](LICENSE) file for more details.
 
 ## 👨‍💻 Author
 
-Made with Flutter by **[Your Name]**  
-🌐 [yourwebsite.com] • 📧 [your@email.com]
+Made with Flutter by **[DilysT]**  
+🌐 [(https://github.com/DilysT/Nutritioners_app)] 
 
 Feel free to fork, improve, and ⭐ this project!
