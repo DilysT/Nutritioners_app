@@ -164,28 +164,57 @@ class _MyMealScreenState extends State<MyMealScreen> {
         ],
         backgroundColor: const Color(0xFFF8F9FB),
         elevation: 0,
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            _buildDateSelector(),
-            if (_isCalendarVisible) _buildCalendar(),
-            const SizedBox(height: 20),
-            if (!_isCalendarVisible) ...[
-              _buildMealCard('Breakfast', meals['Breakfast'] ?? []),
-              const SizedBox(height: 12),
-              _buildMealCard('Lunch', meals['Lunch'] ?? []),
-              const SizedBox(height: 12),
-              _buildMealCard('Dinner', meals['Dinner'] ?? []),
-            ],
-          ],
+      ),body: _isLoading
+        ? const Center(child: CircularProgressIndicator())
+        : Stack(
+      children: [
+        // 🖼 Hình apple nên nằm dưới cùng trong Stack
+        Positioned.fill(
+          child: Align(
+            alignment: Alignment.bottomCenter,
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 10), // cách BottomNavBar ~10px
+              child: Image.asset(
+                'lib/ui/assets/diet.png', // ảnh quả táo PNG nền trong
+                width: 240,
+                fit: BoxFit.contain,
+                opacity: const AlwaysStoppedAnimation(1), // giữ nguyên độ rõ
+              ),
+            ),
+          ),
         ),
-      ),
-      bottomNavigationBar: const BottomNavBar(currentIndex: 1),
+
+        // 📜 Nội dung chính cuộn phía trên hình
+        SingleChildScrollView(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildDateSelector(),
+              if (_isCalendarVisible) _buildCalendar(),
+              const SizedBox(height: 20),
+              if (!_isCalendarVisible) ...[
+                _buildMealCard('Breakfast', meals['Breakfast'] ?? []),
+                const SizedBox(height: 12),
+                _buildMealCard('Lunch', meals['Lunch'] ?? []),
+                const SizedBox(height: 12),
+                _buildMealCard('Dinner', meals['Dinner'] ?? []),
+                const SizedBox(height: 150), // 👈 khoảng cách giữa Dinner và hình apple
+              ],
+              const SizedBox(height: 170), // giữ nguyên tổng khoảng cách
+            ],
+          ),
+        ),
+      ],
+    ),
       backgroundColor: const Color(0xFFF8F9FB),
+      bottomNavigationBar: const BottomNavBar(currentIndex: 1),
+
+
+
+
+
+
     );
   }
 
@@ -561,6 +590,7 @@ class _ChooseFoodScreenState extends State<ChooseFoodScreen> {
         elevation: 0,
       ),
       backgroundColor: Colors.white,
+
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : Padding(
@@ -638,6 +668,8 @@ class _ChooseFoodScreenState extends State<ChooseFoodScreen> {
           ],
         ),
       ),
+
+
     );
   }
 }

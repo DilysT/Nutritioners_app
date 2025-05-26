@@ -67,6 +67,8 @@ flutter:
   assets:
     - lib/ui/assets/back_ground_1.png
     - lib/ui/assets/google_icons.webp
+    - lib/ui/assets/apple.png
+    - lib/ui/assets/diet.png
     - .env
   uses-material-design: true
 
