@@ -16,7 +16,18 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
   List<Map<String, dynamic>> messages = [];
 
   final String apiKey = 'AIzaSyDvT1mryXyKz_TWkhzQW2RvHyZySR9hafY';
-  final String endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+  final String endpoint =
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+
+  @override
+  void initState() {
+    super.initState();
+    // ✅ Tin nhắn chào lúc mở app
+    messages.add({
+      'role': 'bot',
+      'text': '👋 How can I help you?',
+    });
+  }
 
   Future<void> sendMessage(String text) async {
     if (text.trim().isEmpty) return;
@@ -83,11 +94,13 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                 final msg = messages[index];
                 final isUser = msg['role'] == 'user';
                 return Align(
-                  alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+                  alignment:
+                  isUser ? Alignment.centerRight : Alignment.centerLeft,
                   child: Container(
                     margin: const EdgeInsets.symmetric(vertical: 4),
                     padding: const EdgeInsets.all(12),
-                    constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.7),
+                    constraints: BoxConstraints(
+                        maxWidth: MediaQuery.of(context).size.width * 0.7),
                     decoration: BoxDecoration(
                       color: isUser ? Colors.blue : Colors.grey.shade200,
                       borderRadius: BorderRadius.circular(12),
@@ -116,7 +129,8 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                       hintText: "Ask something...",
                       filled: true,
                       fillColor: Colors.white,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                      contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 12),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide.none,
