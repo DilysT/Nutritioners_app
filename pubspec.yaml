@@ -30,7 +30,7 @@ environment:
 dependencies:
   dropdown_button2: ^2.3.9
   table_calendar: ^3.0.8
-  http: ^0.13.5
+  http: ^0.13.6
   flutter_secure_storage: ^8.0.0
   flutter:
     sdk: flutter

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:nutrition_app/ui/screens/authentication/login_screen.dart';
 import '../../widgets/bottom_nav_bar.dart';
+import 'package:nutrition_app/ui/screens/settings/ai_assistant.dart'; // ✅ Đúng đường dẫn
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -47,7 +48,10 @@ class SettingsScreen extends StatelessWidget {
       appBar: AppBar(
         elevation: 0,
         backgroundColor: Colors.white,
-        title: const Text("Settings", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+        title: const Text(
+          "Settings",
+          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+        ),
         centerTitle: true,
         iconTheme: const IconThemeData(color: Colors.black),
       ),
@@ -69,6 +73,19 @@ class SettingsScreen extends StatelessWidget {
             label: "Activity Level",
             onTap: () => Navigator.pushNamed(context, '/settings/activity-level'),
           ),
+
+          // ✅ Thêm AI Assistant giữa Activity Level và Log out
+          _buildSettingItem(
+            icon: Icons.smart_toy_outlined,
+            label: "AI Assistant",
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AiAssistantScreen()),
+              );
+            },
+          ),
+
           _buildSettingItem(
             icon: Icons.logout,
             label: "Log out",
