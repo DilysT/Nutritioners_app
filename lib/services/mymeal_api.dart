@@ -46,7 +46,7 @@ class ApiService {
     required int size,
     required String date,
   }) async {
-    final response = await _client.post(
+    final response = await _client.put(
       'api/auth/meals/$mealId/foods/$listFoodId',
       body: {'date': date, 'portion': portion, 'size': size},
     );

@@ -22,10 +22,9 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
   @override
   void initState() {
     super.initState();
-    // ✅ Tin nhắn chào lúc mở app
     messages.add({
       'role': 'bot',
-      'text': '👋 How can I help you?',
+      'text': '👋 Hello! How can I assist you today?',
     });
   }
 
@@ -36,6 +35,9 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
       messages.add({'role': 'user', 'text': text});
       _controller.clear();
     });
+
+    await Future.delayed(const Duration(milliseconds: 100));
+    _scrollToBottom();
 
     try {
       final response = await http.post(
@@ -60,15 +62,21 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
       });
 
       await Future.delayed(const Duration(milliseconds: 100));
-      _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 400),
-        curve: Curves.easeOut,
-      );
+      _scrollToBottom();
     } catch (e) {
       setState(() {
         messages.add({'role': 'bot', 'text': '⚠️ Failed to get response.'});
       });
+    }
+  }
+
+  void _scrollToBottom() {
+    if (_scrollController.hasClients) {
+      _scrollController.animateTo(
+        _scrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
     }
   }
 
@@ -79,10 +87,10 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
         title: const Text("AI Assistant"),
         centerTitle: true,
         backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
+        foregroundColor: Colors.black87,
         elevation: 0.5,
       ),
-      backgroundColor: const Color(0xFFF8F9FB),
+      backgroundColor: const Color(0xFFF4F6FA),
       body: Column(
         children: [
           Expanded(
@@ -93,56 +101,96 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
               itemBuilder: (context, index) {
                 final msg = messages[index];
                 final isUser = msg['role'] == 'user';
-                return Align(
-                  alignment:
-                  isUser ? Alignment.centerRight : Alignment.centerLeft,
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(vertical: 4),
-                    padding: const EdgeInsets.all(12),
-                    constraints: BoxConstraints(
-                        maxWidth: MediaQuery.of(context).size.width * 0.7),
-                    decoration: BoxDecoration(
-                      color: isUser ? Colors.blue : Colors.grey.shade200,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      msg['text'],
-                      style: TextStyle(
-                        color: isUser ? Colors.white : Colors.black,
-                        fontSize: 15,
+
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Row(
+                    mainAxisAlignment:
+                    isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      if (!isUser)
+                        const CircleAvatar(
+                          backgroundColor: Colors.blue,
+                          child: Text('🐧', style: TextStyle(fontSize: 18)),
+                          radius: 18,
+                        ),
+
+                      if (!isUser) const SizedBox(width: 8),
+                      Flexible(
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color:
+                            isUser ? const Color(0xFF007AFF) : Colors.white,
+                            borderRadius: BorderRadius.only(
+                              topLeft: const Radius.circular(12),
+                              topRight: const Radius.circular(12),
+                              bottomLeft: Radius.circular(isUser ? 12 : 0),
+                              bottomRight: Radius.circular(isUser ? 0 : 12),
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black12,
+                                blurRadius: 4,
+                                offset: const Offset(0, 2),
+                              )
+                            ],
+                          ),
+                          child: Text(
+                            msg['text'],
+                            style: TextStyle(
+                              fontSize: 15,
+                              color: isUser ? Colors.white : Colors.black,
+                            ),
+                          ),
+                        ),
                       ),
-                    ),
+                      if (isUser) const SizedBox(width: 8),
+                      if (isUser)
+                        const CircleAvatar(
+                          backgroundColor: Colors.grey,
+                          child: Icon(Icons.person, color: Colors.white),
+                          radius: 18,
+                        ),
+                    ],
                   ),
                 );
               },
             ),
           ),
           const Divider(height: 1),
-          Padding(
+          Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            color: Colors.white,
             child: Row(
               children: [
                 Expanded(
                   child: TextField(
                     controller: _controller,
+                    textInputAction: TextInputAction.send,
+                    onSubmitted: sendMessage,
                     decoration: InputDecoration(
-                      hintText: "Ask something...",
+                      hintText: "Type your message...",
                       filled: true,
-                      fillColor: Colors.white,
-                      contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 12),
+                      fillColor: const Color(0xFFF2F5FD),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 12),
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(20),
                         borderSide: BorderSide.none,
                       ),
                     ),
-                    onSubmitted: sendMessage,
                   ),
                 ),
                 const SizedBox(width: 8),
-                IconButton(
-                  icon: const Icon(Icons.send, color: Colors.blue),
-                  onPressed: () => sendMessage(_controller.text),
+                CircleAvatar(
+                  radius: 22,
+                  backgroundColor: const Color(0xFF007AFF),
+                  child: IconButton(
+                    icon: const Icon(Icons.send_rounded, color: Colors.white),
+                    onPressed: () => sendMessage(_controller.text),
+                  ),
                 ),
               ],
             ),

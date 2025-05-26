@@ -946,7 +946,7 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
 
 
 class EditFoodDialog extends StatefulWidget {
-  final int mealId;
+  final int mealId;           // ✅ Đảm bảo mealId được truyền từ ngoài vào
   final int listFoodId;
   final int currentPortion;
   final int currentSize;
@@ -969,45 +969,59 @@ class EditFoodDialog extends StatefulWidget {
 
 class _EditFoodDialogState extends State<EditFoodDialog> {
   late TextEditingController _portionController;
-  late TextEditingController _sizeController;
 
   final List<String> sizeOptions = ['large - 135g', 'small - 100g', 'cup'];
+  final Map<String, int> sizeMap = {
+    'large - 135g': 135,
+    'small - 100g': 100,
+    'cup': 75,
+  };
+
   final Map<int, String> mealOptions = {
     1: 'Breakfast',
     2: 'Lunch',
     3: 'Dinner',
   };
 
-  String _selectedSize = 'large - 135g';
-  int _selectedMeal = 1;
+  late String _selectedSize;
+  late int _selectedMeal;
 
   @override
   void initState() {
     super.initState();
-    _portionController = TextEditingController(text: widget.currentPortion.toString());
-    _sizeController = TextEditingController(text: widget.currentSize.toString());
-  }
 
-  @override
-  void dispose() {
-    _portionController.dispose();
-    _sizeController.dispose();
-    super.dispose();
+    _portionController = TextEditingController(text: widget.currentPortion.toString());
+
+    // ✅ Map currentSize to correct label
+    _selectedSize = sizeMap.entries
+        .firstWhere((entry) => entry.value == widget.currentSize,
+        orElse: () => const MapEntry('large - 135g', 135))
+        .key;
+
+    // ✅ Use mealId from props
+    _selectedMeal = widget.mealId;
   }
 
   void _updateFood() async {
     final portion = int.tryParse(_portionController.text) ?? 1;
+    final sizeValue = sizeMap[_selectedSize] ?? 100;
 
     await ApiService.updateFoodInMeal(
       mealId: _selectedMeal,
       listFoodId: widget.listFoodId,
       portion: portion,
-      size: int.tryParse(_sizeController.text) ?? 1,
+      size: sizeValue,
       date: widget.date,
     );
 
     Navigator.of(context).pop();
     widget.onUpdated();
+  }
+
+  @override
+  void dispose() {
+    _portionController.dispose();
+    super.dispose();
   }
 
   @override
@@ -1019,14 +1033,13 @@ class _EditFoodDialogState extends State<EditFoodDialog> {
         elevation: 0,
         leading: BackButton(color: Colors.blue),
         title: const Text('Edit food', style: TextStyle(color: Colors.black)),
-        centerTitle: false,
       ),
       body: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Nutrition summary
+            // Summary
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: const [
@@ -1038,7 +1051,6 @@ class _EditFoodDialogState extends State<EditFoodDialog> {
             ),
             const SizedBox(height: 24),
 
-            // Serving size
             const Text('Serving size', style: TextStyle(fontSize: 14)),
             const SizedBox(height: 8),
             Row(
@@ -1090,59 +1102,45 @@ class _EditFoodDialogState extends State<EditFoodDialog> {
             ),
 
             const SizedBox(height: 20),
-
-            // Meal dropdown
             const Text('Meal', style: TextStyle(fontSize: 14)),
             const SizedBox(height: 8),
+
+
             Container(
               height: 40,
-              padding: const EdgeInsets.symmetric(horizontal: 8),
+              width: double.infinity,
+              alignment: Alignment.centerLeft,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
               decoration: BoxDecoration(
                 border: Border.all(color: Colors.grey.shade400),
                 borderRadius: BorderRadius.circular(8),
+                color: Colors.grey.shade100,
               ),
-              child: DropdownButton<int>(
-                value: _selectedMeal,
-                isExpanded: true,
-                underline: const SizedBox(),
-                icon: const Icon(Icons.arrow_drop_down),
+              child: Text(
+                mealOptions[widget.mealId] ?? 'Meal',
                 style: const TextStyle(fontSize: 14, color: Colors.black),
-                items: mealOptions.entries.map((entry) {
-                  return DropdownMenuItem(
-                    value: entry.key,
-                    child: Text(entry.value),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  if (value != null) {
-                    setState(() => _selectedMeal = value);
-                  }
-                },
               ),
             ),
 
+
             const Spacer(),
 
-            // Discard button
             Center(
               child: TextButton(
                 onPressed: () => Navigator.pop(context),
                 child: const Text('Discard', style: TextStyle(color: Colors.blue)),
               ),
             ),
-
             const SizedBox(height: 12),
-
-            // Save button
             SizedBox(
               width: double.infinity,
               height: 50,
               child: ElevatedButton(
+                onPressed: _updateFood,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF007AFF),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
-                onPressed: _updateFood,
                 child: const Text('Save', style: TextStyle(fontSize: 16, color: Colors.white)),
               ),
             ),
@@ -1152,4 +1150,5 @@ class _EditFoodDialogState extends State<EditFoodDialog> {
     );
   }
 }
+
 
