@@ -34,6 +34,7 @@ class _MyMealScreenState extends State<MyMealScreen> {
     _fetchMeals();
   }
 
+
   Future<void> _createDiaryForDay(DateTime date) async {
     final dateStr = _formatDate(date);
     try {
@@ -68,9 +69,13 @@ class _MyMealScreenState extends State<MyMealScreen> {
           meals[mealType]!.add(MealItem(
             foodId: item['food_id'],
             name: item['name_food'],
-            kcal: double.tryParse(item['calories'] ?? '0')?.toInt() ?? 0,
-            portion: item['portion'],
-            size: item['size'],
+            kcal: double.tryParse(item['calories']?.toString() ?? '0')?.toInt() ?? 0,
+            portion: item['portion'] ?? 1,
+            fat: double.tryParse(item['fat']?.toString() ?? '0') ?? 0.0,
+            protein: double.tryParse(item['protein']?.toString() ?? '0') ?? 0.0,
+            carbs: double.tryParse(item['carbs']?.toString() ?? '0') ?? 0.0,
+            fiber: double.tryParse(item['fiber']?.toString() ?? '0') ?? 0.0,
+            cholesterol: double.tryParse(item['cholesterol']?.toString() ?? '0') ?? 0.0,
           ));
         }
       }
@@ -80,20 +85,19 @@ class _MyMealScreenState extends State<MyMealScreen> {
     setState(() => _isLoading = false);
   }
 
-
-
   Future<void> _addFood(Map<String, dynamic> result) async {
     final dateStr = _formatDate(_selectedDayOrToday());
-    // In ra các tham số trước khi gọi API
-    debugPrint('Adding food with parameters: MealId: ${result['mealId']}, FoodId: ${result['foodId']}, Portion: ${result['portion']}, Size: ${result['size']}, Date: $dateStr');
+
     try {
-      await ApiService.addFoodToMeal(
+      final response = await ApiService.addFoodToMeal(
         mealId: result['mealId'],
         foodId: result['foodId'],
         portion: result['portion'],
-        size: result['size'],
         date: dateStr,
+        ingredientsList: List<Map<String, dynamic>>.from(result['ingredients_list']),
       );
+
+      debugPrint('Add food response: $response');
       await _fetchMeals();
     } catch (e) {
       debugPrint('Error adding food: $e');
@@ -142,29 +146,62 @@ class _MyMealScreenState extends State<MyMealScreen> {
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        title: const Text(
-          'My meal',
-          style: TextStyle(color: Colors.black, fontSize: 28, fontWeight: FontWeight.bold),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add_circle_outline),
-            color: Colors.blue,
-            onPressed: () async {
-              final result = await Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const ChooseFoodScreen()),
-              );
-
-              if (result != null) {
-                await _addFood(result);
-              }
-            },
-          ),
-        ],
         backgroundColor: const Color(0xFFF8F9FB),
         elevation: 0,
+        title: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'My meal',
+              style: TextStyle(
+                color: Colors.black,
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            Expanded(
+              child: Center(
+                child: ElevatedButton.icon(
+                  onPressed: () async {
+                    final dateStr = _formatDate(_selectedDayOrToday());
+                    setState(() => _isLoading = true);
+                    try {
+                      await ApiService.generateMealFor7Days(date: dateStr);
+                      await _fetchMeals();
+                    } catch (e) {
+                      debugPrint('Error generating meal plan: $e');
+                    }
+                    setState(() => _isLoading = false);
+                  },
+                  icon: const Icon(Icons.refresh, size: 18),
+                  label: const Text('Generate'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.add_circle_outline),
+              color: Colors.blue,
+              onPressed: () async {
+                final result = await Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const ChooseFoodScreen()),
+                );
+                if (result != null) {
+                  await _addFood(result);
+                }
+              },
+            ),
+          ],
+        ),
       ),
+
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
@@ -344,12 +381,6 @@ class _MyMealScreenState extends State<MyMealScreen> {
     );
   }
 
-
-
-
-
-
-
   Widget _buildMealCard(String mealType, List<MealItem> mealItems) {
     int totalCalories = mealItems.fold(0, (sum, item) => sum + item.kcal);
     int mealId = _mealTypeToId(mealType);
@@ -392,31 +423,60 @@ class _MyMealScreenState extends State<MyMealScreen> {
             : mealItems.map((item) {
           return ListTile(
             title: Text(item.name),
-            subtitle: Text('${item.kcal} kcal, Portion: ${item.portion}, Size: ${item.size}g'),
+            subtitle: Text('${item.kcal} kcal, Portion: ${item.portion}'),
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-
-
 
                 Row(
                   children: [
                     // Nút edit
                     InkWell(
-                      onTap: () {
-                        showDialog(
-                          context: context,
-                          builder: (_) => EditFoodDialog(
-                            mealId: mealId,
-                            listFoodId: item.foodId,
-                            currentPortion: item.portion,
-                            currentSize: item.size,
-                            date: _formatDate(_selectedDayOrToday()),
-                            onUpdated: _fetchMeals,
-                          ),
-                        );
-                      },
-                      borderRadius: BorderRadius.circular(8),
+
+                onTap: () {
+          showDialog(
+          context: context,
+          builder: (_) => FutureBuilder<Map<String, dynamic>>(
+          future: ApiService.getFoodAndIngredientChange(
+          mealId: mealId,
+          foodId: item.foodId,
+          date: _formatDate(_selectedDayOrToday()),
+          ),
+          builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+          } else if (snapshot.hasError) {
+          return AlertDialog(
+          title: const Text('Error'),
+          content: Text('Failed to load ingredients: ${snapshot.error}'),
+          );
+          }
+
+          final ingredientList = snapshot.data!['food']
+              .where((f) => f['food_id'] == item.foodId)
+              .toList()
+              .cast<Map<String, dynamic>>();
+
+          final foodMap = {
+          'food_id': item.foodId,
+          'name_food': item.name,
+          };
+
+          return EditFoodDialog(
+          food: foodMap,
+          ingredients: ingredientList,
+          mealId: mealId,
+          listFoodId: item.foodId,
+          currentPortion: item.portion,
+          date: _formatDate(_selectedDayOrToday()),
+          onUpdated: _fetchMeals, // sẽ gọi lại API load lại meal sau khi save
+          );
+          },
+          ),
+          );
+          },
+
+            borderRadius: BorderRadius.circular(8),
                       child: Container(
                         padding: const EdgeInsets.all(8),
                         margin: const EdgeInsets.only(right: 12),
@@ -483,11 +543,6 @@ class _MyMealScreenState extends State<MyMealScreen> {
                     ),
                   ],
                 )
-
-
-
-
-
               ],
             ),
           );
@@ -509,6 +564,7 @@ class _ChooseFoodScreenState extends State<ChooseFoodScreen> {
   List<dynamic> _filteredFood = [];
   bool _isLoading = true;
   final TextEditingController _searchController = TextEditingController();
+  List<dynamic> _allFoodIngredientData = [];
 
   @override
   void initState() {
@@ -527,12 +583,42 @@ class _ChooseFoodScreenState extends State<ChooseFoodScreen> {
     });
   }
 
+  // Future<void> _fetchFoods() async {
+  //   try {
+  //     final data = await ApiService.getAllFoods();
+  //     setState(() {
+  //       _foodList = data['food'];
+  //       _filteredFood = _foodList;
+  //       _isLoading = false;
+  //     });
+  //   } catch (e) {
+  //     debugPrint('Error loading foods: $e');
+  //     setState(() => _isLoading = false);
+  //   }
+  // }
   Future<void> _fetchFoods() async {
     try {
-      final data = await ApiService.getAllFoods();
+      final data = await ApiService.getFoodAndIngredient();
+      _allFoodIngredientData = data['food'];
+      final rawList = data['food'];
+
+      // Lấy danh sách tên món ăn không trùng nhau
+      final uniqueFoods = <Map<String, dynamic>>[];
+      final seenFoodIds = <int>{};
+
+      for (var item in rawList) {
+        if (!seenFoodIds.contains(item['food_id'])) {
+          uniqueFoods.add({
+            'food_id': item['food_id'],
+            'name_food': item['food_name'],
+          });
+          seenFoodIds.add(item['food_id']);
+        }
+      }
+
       setState(() {
-        _foodList = data['food'];
-        _filteredFood = _foodList;
+        _foodList = uniqueFoods;
+        _filteredFood = uniqueFoods;
         _isLoading = false;
       });
     } catch (e) {
@@ -598,11 +684,18 @@ class _ChooseFoodScreenState extends State<ChooseFoodScreen> {
                     title: Text(food['name_food']),
                     trailing: InkWell(
                       onTap: () async {
+                        final foodIngredients = _allFoodIngredientData
+                            .where((f) => f['food_id'] == food['food_id'])
+                            .toList()
+                            .cast<Map<String, dynamic>>(); // THÊM cast() ở cuối
+
                         final result = await Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) =>
-                                FoodDetailScreen(food: food),
+                            builder: (context) => FoodDetailScreen(
+                              food: food,
+                              ingredients: foodIngredients,
+                            ),
                           ),
                         );
                         if (result != null) {
@@ -638,41 +731,79 @@ class _ChooseFoodScreenState extends State<ChooseFoodScreen> {
   }
 }
 
-
-
-
 class FoodDetailScreen extends StatefulWidget {
   final Map<String, dynamic> food;
+  final List<Map<String, dynamic>> ingredients;
 
-  const FoodDetailScreen({super.key, required this.food});
+  const FoodDetailScreen({
+    super.key,
+    required this.food,
+    required this.ingredients,
+  });
 
   @override
   State<FoodDetailScreen> createState() => _FoodDetailScreenState();
 }
 
 class _FoodDetailScreenState extends State<FoodDetailScreen> {
-  int _portion = 1;
-  int _size = 100;
   int _mealId = 1;
-
+  int _portion = 1;
   final Map<int, String> mealOptions = {
     1: 'Breakfast',
     2: 'Lunch',
     3: 'Dinner',
   };
 
-  final Map<String, int> sizeOptions = {
-    'large - 135g': 135,
-    'small - 100g': 100,
-    'cup': 75,
-  };
+  List<Map<String, dynamic>> ingredientInputs = [];
+
+  @override
+  void initState() {
+    super.initState();
+    ingredientInputs = widget.ingredients.map((ing) {
+      final gram = ing['gram'] ?? 100;
+      return {
+        ...ing,
+        'input_gram': gram,
+        'base_gram': gram,
+        'ingredient_id': ing['ingredient_id'] ?? ing['id'],
+        'ingredient_name': ing['ingredient_name'] ?? ing['name'],
+        'base_calories': ing['calories'] ?? 0,
+        'base_protein': ing['protein'] ?? 0,
+        'base_fat': ing['fat'] ?? 0,
+        'base_carb': ing['carb'] ?? 0,
+        'base_cholesterol': ing['cholesterol'] ?? 0,
+      };
+    }).toList();
+  }
+
+  Map<String, double> calculateTotalNutrition() {
+    double calories = 0, protein = 0, fat = 0, carb = 0, cholesterol = 0;
+
+    for (var ing in ingredientInputs) {
+      final inputGram = ing['input_gram'];
+      final baseGram = ing['base_gram'];
+      final ratio = inputGram / baseGram;
+
+      calories += (ing['base_calories'] ?? 0) * ratio;
+      protein += (ing['base_protein'] ?? 0) * ratio;
+      fat += (ing['base_fat'] ?? 0) * ratio;
+      carb += (ing['base_carb'] ?? 0) * ratio;
+      cholesterol += (ing['base_cholesterol'] ?? 0) * ratio;
+    }
+
+    return {
+      'calories': calories,
+      'protein': protein,
+      'fat': fat,
+      'carb': carb,
+      'cholesterol': cholesterol,
+    };
+  }
+
 
   @override
   Widget build(BuildContext context) {
-    String? selectedSize = sizeOptions.entries
-        .firstWhere((entry) => entry.value == _size,
-        orElse: () => const MapEntry('custom', 0))
-        .key;
+    final total = calculateTotalNutrition();
 
     return Scaffold(
       appBar: AppBar(
@@ -683,197 +814,128 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Nutritional summary
+            // Tổng dinh dưỡng toàn bộ món
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: const [
-                Text('100 kcal'),
-                Text('10 protein'),
-                Text('20 carbs'),
-                Text('10 fat'),
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                Text('${total['calories']!.toStringAsFixed(0)} kcal'),
+                Text('${total['protein']!.toStringAsFixed(1)} protein'),
+                Text('${total['carb']!.toStringAsFixed(1)} carbs'),
+                Text('${total['fat']!.toStringAsFixed(1)} fat'),
+
               ],
             ),
             const SizedBox(height: 24),
 
-            // Serving size
-            Row(
-              children: [
-                const Text('Serving size', style: TextStyle(fontSize: 16)),
-                const SizedBox(width: 16),
-                SizedBox(
-                  width: 48,
-                  height: 36,
-                  child: TextFormField(
-                    initialValue: '$_portion',
-                    textAlign: TextAlign.center,
-                    keyboardType: TextInputType.number,
-                    decoration: InputDecoration(
-                      contentPadding: EdgeInsets.zero,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(6),
+            // Ingredient list with editable gram
+            const Text('Ingredients', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
+            Expanded(
+              child: ListView.separated(
+                itemCount: ingredientInputs.length,
+                separatorBuilder: (_, __) => const Divider(),
+                itemBuilder: (context, index) {
+                  final ing = ingredientInputs[index];
+
+                  final ratio = ing['input_gram'] / ing['base_gram'];
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('${ing['ingredient_name']}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                      Row(
+                        children: [
+                          SizedBox(
+                            width: 80,
+                            height: 36,
+                            child: TextFormField(
+                              initialValue: ing['input_gram'].toString(),
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(
+                                labelText: 'gram',
+                                border: OutlineInputBorder(),
+                              ),
+                              onChanged: (value) {
+                                final newGram = int.tryParse(value) ?? 0;
+                                setState(() {
+                                  ingredientInputs[index]['input_gram'] = newGram;
+                                });
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+
+                          Expanded(
+                            child:
+                            Text(
+                              '${((ing['calories'] ?? 0) * ratio).toStringAsFixed(1)} kcal, '
+                                  '${((ing['protein'] ?? 0) * ratio).toStringAsFixed(1)}g protein, '
+                                  '${((ing['fat'] ?? 0) * ratio).toStringAsFixed(1)}g fat, '
+                                  '${((ing['carb'] ?? 0) * ratio).toStringAsFixed(1)}g carb, '
+                                  '${((ing['cholesterol'] ?? 0) * ratio).toStringAsFixed(1)}g cholesterol',
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                    onChanged: (value) {
-                      final parsed = int.tryParse(value);
-                      if (parsed != null) {
-                        setState(() => _portion = parsed);
-                      }
-                    },
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  height: 36,
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey.shade400),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      value: sizeOptions.containsKey(selectedSize)
-                          ? selectedSize
-                          : null,
-                      icon: const Icon(Icons.keyboard_arrow_down),
-                      underline: const SizedBox(),
-                      selectedItemBuilder: (BuildContext context) {
-                        return sizeOptions.keys.map((String value) {
-                          return Padding(
-                            padding:
-                            const EdgeInsets.symmetric(horizontal: 8),
-                            child: Text(
-                              value,
-                              style: const TextStyle(
-                                fontSize: 14,
-                                color: Colors.black,
-                              ),
-                            ),
-                          );
-                        }).toList();
-                      },
-                      items: sizeOptions.entries.map((entry) {
-                        final isSelected = entry.value == _size;
-                        return DropdownMenuItem<String>(
-                          value: entry.key,
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: isSelected ? Colors.blue : null,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 8),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  entry.key,
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: isSelected
-                                        ? Colors.white
-                                        : Colors.black,
-                                  ),
-                                ),
-                                const Icon(
-                                  Icons.keyboard_arrow_down,
-                                  size: 16,
-                                  color: Colors.black,
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                      onChanged: (value) {
-                        if (value != null && sizeOptions.containsKey(value)) {
-                          setState(() => _size = sizeOptions[value]!);
-                        }
-                      },
-                    ),
-                  ),
-                ),
-              ],
+                    ],
+                  );
+                },
+              ),
             ),
+            const SizedBox(height: 16),
 
-            const SizedBox(height: 24),
-
-            // Meal dropdown
+            // Meal and Portion
             Row(
               children: [
-                const Text('Meal', style: TextStyle(fontSize: 16)),
-                const SizedBox(width: 72),
-                Container(
-                  height: 36,
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey.shade400),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<int>(
-                      value: _mealId,
-                      icon: const Icon(Icons.keyboard_arrow_down),
-                      underline: const SizedBox(),
-                      selectedItemBuilder: (BuildContext context) {
-                        return mealOptions.entries.map((entry) {
-                          return Padding(
-                            padding:
-                            const EdgeInsets.symmetric(horizontal: 8),
-                            child: Text(
-                              entry.value,
-                              style: const TextStyle(
-                                fontSize: 14,
-                                color: Colors.black,
-                              ),
-                            ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Meal'),
+                      DropdownButton<int>(
+                        value: _mealId,
+                        isExpanded: true,
+                        items: mealOptions.entries.map((entry) {
+                          return DropdownMenuItem(
+                            value: entry.key,
+                            child: Text(entry.value),
                           );
-                        }).toList();
-                      },
-                      items: mealOptions.entries.map((entry) {
-                        final isSelected = entry.key == _mealId;
-                        return DropdownMenuItem<int>(
-                          value: entry.key,
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: isSelected ? Colors.blue : null,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 8),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  entry.value,
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: isSelected
-                                        ? Colors.white
-                                        : Colors.black,
-                                  ),
-                                ),
-                                const Icon(
-                                  Icons.keyboard_arrow_down,
-                                  size: 16,
-                                  color: Colors.black,
-                                ),
-                              ],
-                            ),
+                        }).toList(),
+                        onChanged: (value) {
+                          if (value != null) setState(() => _mealId = value);
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Portion'),
+                      SizedBox(
+                        height: 40,
+                        child: TextFormField(
+                          initialValue: _portion.toString(),
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                            border: OutlineInputBorder(),
                           ),
-                        );
-                      }).toList(),
-                      onChanged: (value) {
-                        if (value != null) {
-                          setState(() => _mealId = value);
-                        }
-                      },
-                    ),
+                          onChanged: (value) {
+                            final parsed = int.tryParse(value);
+                            if (parsed != null) {
+                              setState(() => _portion = parsed);
+                            }
+                          },
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
 
-            const Spacer(),
+            const SizedBox(height: 16),
 
             // Add button
             SizedBox(
@@ -885,7 +947,10 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
                     'foodId': widget.food['food_id'],
                     'mealId': _mealId,
                     'portion': _portion,
-                    'size': _size,
+                    'ingredients_list': ingredientInputs.map((ing) => {
+                      'ingredient_id': ing['id'],
+                      'gram': ing['input_gram']
+                    }).toList(),
                   });
                 },
                 icon: const Icon(Icons.add_circle_outline),
@@ -893,9 +958,7 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.blue,
                   foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
               ),
             ),
@@ -906,23 +969,22 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
   }
 }
 
-
-
-
 class EditFoodDialog extends StatefulWidget {
+  final Map<String, dynamic> food;
+  final List<Map<String, dynamic>> ingredients;
   final int mealId;
   final int listFoodId;
   final int currentPortion;
-  final int currentSize;
   final String date;
   final VoidCallback onUpdated;
 
   const EditFoodDialog({
     super.key,
+    required this.food,
+    required this.ingredients,
     required this.mealId,
     required this.listFoodId,
     required this.currentPortion,
-    required this.currentSize,
     required this.date,
     required this.onUpdated,
   });
@@ -932,183 +994,197 @@ class EditFoodDialog extends StatefulWidget {
 }
 
 class _EditFoodDialogState extends State<EditFoodDialog> {
-  late TextEditingController _portionController;
-  late TextEditingController _sizeController;
-
-  final List<String> sizeOptions = ['large - 135g', 'small - 100g', 'cup'];
-  final Map<int, String> mealOptions = {
-    1: 'Breakfast',
-    2: 'Lunch',
-    3: 'Dinner',
-  };
-
-  String _selectedSize = 'large - 135g';
-  int _selectedMeal = 1;
+  int _portion = 1;
+  List<Map<String, dynamic>> ingredientInputs = [];
 
   @override
   void initState() {
     super.initState();
-    _portionController = TextEditingController(text: widget.currentPortion.toString());
-    _sizeController = TextEditingController(text: widget.currentSize.toString());
+    _portion = widget.currentPortion;
+    _loadInitialData(widget.ingredients);
   }
 
-  @override
-  void dispose() {
-    _portionController.dispose();
-    _sizeController.dispose();
-    super.dispose();
+  void _loadInitialData(List<Map<String, dynamic>> rawIngredients) {
+    ingredientInputs = rawIngredients.map((ing) {
+      final gram = ing['gram'] ?? 100;
+      return {
+        ...ing,
+        'input_gram': gram,
+        'base_gram': gram,
+        'base_calories': ing['calories'] ?? 0,
+        'base_protein': ing['protein'] ?? 0,
+        'base_fat': ing['fat'] ?? 0,
+        'base_carb': ing['carb'] ?? 0,
+        'base_cholesterol': ing['cholesterol'] ?? 0,
+        'ingredient_id': ing['ingredient_id'] ?? ing['id'],
+        'ingredient_name': ing['ingredient_name'] ?? ing['name'],
+      };
+    }).toList();
   }
 
-  void _updateFood() async {
-    final portion = int.tryParse(_portionController.text) ?? 1;
+  Map<String, double> calculateTotalNutrition() {
+    double calories = 0, protein = 0, fat = 0, carb = 0, cholesterol = 0;
+
+    for (var ing in ingredientInputs) {
+      final ratio = ing['input_gram'] / (ing['base_gram'] ?? 100);
+      calories += (ing['base_calories'] ?? 0) * ratio;
+      protein += (ing['base_protein'] ?? 0) * ratio;
+      fat += (ing['base_fat'] ?? 0) * ratio;
+      carb += (ing['base_carb'] ?? 0) * ratio;
+      cholesterol += (ing['base_cholesterol'] ?? 0) * ratio;
+    }
+
+    return {
+      'calories': calories,
+      'protein': protein,
+      'fat': fat,
+      'carb': carb,
+      'cholesterol': cholesterol,
+    };
+  }
+
+  Future<void> _updateFood() async {
+    final ingredientsList = ingredientInputs.map((ing) => {
+      'ingredient_id': ing['ingredient_id'],
+      'gram': ing['input_gram']
+    }).toList();
 
     await ApiService.updateFoodInMeal(
-      mealId: _selectedMeal,
+      mealId: widget.mealId,
       listFoodId: widget.listFoodId,
-      portion: portion,
-      size: int.tryParse(_sizeController.text) ?? 1,
+      portion: _portion,
+      date: widget.date,
+      ingredientsList: ingredientsList,
+    );
+
+    final updatedData = await ApiService.getFoodAndIngredientChange(
+      mealId: widget.mealId,
+      foodId: widget.food['food_id'],
       date: widget.date,
     );
 
-    Navigator.of(context).pop();
+    if (updatedData['food'] != null && mounted) {
+      _loadInitialData(List<Map<String, dynamic>>.from(updatedData['food']));
+      setState(() {});
+    }
+
     widget.onUpdated();
+    Navigator.pop(context);
   }
 
   @override
   Widget build(BuildContext context) {
+    final total = calculateTotalNutrition();
     return Scaffold(
-      backgroundColor: Colors.white,
       appBar: AppBar(
+        title: const Text('Edit Food'),
         backgroundColor: Colors.white,
-        elevation: 0,
-        leading: BackButton(color: Colors.blue),
-        title: const Text('Edit food', style: TextStyle(color: Colors.black)),
-        centerTitle: false,
+        foregroundColor: Colors.black,
       ),
       body: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Nutrition summary
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: const [
-                Text('100 kcal', style: TextStyle(fontWeight: FontWeight.w500)),
-                Text('10 protein', style: TextStyle(fontWeight: FontWeight.w500)),
-                Text('20 carbs', style: TextStyle(fontWeight: FontWeight.w500)),
-                Text('10 fat', style: TextStyle(fontWeight: FontWeight.w500)),
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                Text('${total['calories']!.toStringAsFixed(0)} kcal'),
+                Text('${total['protein']!.toStringAsFixed(1)} protein'),
+                Text('${total['carb']!.toStringAsFixed(1)} carbs'),
+                Text('${total['fat']!.toStringAsFixed(1)} fat'),
               ],
             ),
             const SizedBox(height: 24),
-
-            // Serving size
-            const Text('Serving size', style: TextStyle(fontSize: 14)),
-            const SizedBox(height: 8),
+            const Text('Ingredients', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
+            Expanded(
+              child: ListView.separated(
+                itemCount: ingredientInputs.length,
+                separatorBuilder: (_, __) => const Divider(),
+                itemBuilder: (context, index) {
+                  final ing = ingredientInputs[index];
+                  final ratio = ing['input_gram'] / (ing['base_gram'] ?? 100);
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('${ing['ingredient_name']}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                      Row(
+                        children: [
+                          SizedBox(
+                            width: 80,
+                            height: 36,
+                            child: TextFormField(
+                              initialValue: ing['input_gram'].toString(),
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(
+                                labelText: 'gram',
+                                border: OutlineInputBorder(),
+                              ),
+                              onChanged: (value) {
+                                final newGram = int.tryParse(value) ?? 0;
+                                setState(() {
+                                  ingredientInputs[index]['input_gram'] = newGram;
+                                });
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              '${(ing['base_calories'] * ratio).toStringAsFixed(1)} kcal, '
+                                  '${(ing['base_protein'] * ratio).toStringAsFixed(1)}g protein, '
+                                  '${(ing['base_fat'] * ratio).toStringAsFixed(1)}g fat, '
+                                  '${(ing['base_carb'] * ratio).toStringAsFixed(1)}g carb, '
+                                  '${(ing['base_cholesterol'] * ratio).toStringAsFixed(1)}g cholesterol',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 16),
             Row(
               children: [
-                SizedBox(
-                  width: 50,
-                  height: 40,
-                  child: TextField(
-                    controller: _portionController,
-                    keyboardType: TextInputType.number,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 14),
-                    decoration: InputDecoration(
-                      contentPadding: const EdgeInsets.symmetric(vertical: 10),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                  ),
-                ),
+                const Text('Portion'),
                 const SizedBox(width: 16),
                 Expanded(
-                  child: Container(
-                    height: 40,
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.grey.shade400),
-                      borderRadius: BorderRadius.circular(8),
+                  child: TextFormField(
+                    initialValue: _portion.toString(),
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
                     ),
-                    child: DropdownButton<String>(
-                      value: _selectedSize,
-                      isExpanded: true,
-                      underline: const SizedBox(),
-                      icon: const Icon(Icons.arrow_drop_down),
-                      style: const TextStyle(fontSize: 14, color: Colors.black),
-                      items: sizeOptions.map((size) {
-                        return DropdownMenuItem(
-                          value: size,
-                          child: Text(size),
-                        );
-                      }).toList(),
-                      onChanged: (value) {
-                        if (value != null) {
-                          setState(() => _selectedSize = value);
-                        }
-                      },
-                    ),
+                    onChanged: (value) {
+                      final parsed = int.tryParse(value);
+                      if (parsed != null) {
+                        setState(() => _portion = parsed);
+                      }
+                    },
                   ),
                 ),
               ],
             ),
-
-            const SizedBox(height: 20),
-
-            // Meal dropdown
-            const Text('Meal', style: TextStyle(fontSize: 14)),
-            const SizedBox(height: 8),
-            Container(
-              height: 40,
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey.shade400),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: DropdownButton<int>(
-                value: _selectedMeal,
-                isExpanded: true,
-                underline: const SizedBox(),
-                icon: const Icon(Icons.arrow_drop_down),
-                style: const TextStyle(fontSize: 14, color: Colors.black),
-                items: mealOptions.entries.map((entry) {
-                  return DropdownMenuItem(
-                    value: entry.key,
-                    child: Text(entry.value),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  if (value != null) {
-                    setState(() => _selectedMeal = value);
-                  }
-                },
-              ),
-            ),
-
-            const Spacer(),
-
-            // Discard button
-            Center(
-              child: TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Discard', style: TextStyle(color: Colors.blue)),
-              ),
-            ),
-
-            const SizedBox(height: 12),
-
-            // Save button
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF007AFF),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Discard', style: TextStyle(color: Colors.blue)),
                 ),
-                onPressed: _updateFood,
-                child: const Text('Save', style: TextStyle(fontSize: 16, color: Colors.white)),
-              ),
+                ElevatedButton(
+                  onPressed: _updateFood,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text('Save'),
+                ),
+              ],
             ),
           ],
         ),
@@ -1116,4 +1192,3 @@ class _EditFoodDialogState extends State<EditFoodDialog> {
     );
   }
 }
-
